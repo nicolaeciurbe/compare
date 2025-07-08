@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Score {
   id: number;
@@ -92,43 +92,59 @@ export default function Home() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [lastScoreId, setLastScoreId] = useState<number | null>(null);
 
+  // New: Track if the game has started (timer running) after first click
+  const [hasStarted, setHasStarted] = useState(false);
+
+  // Timer refs for cleanup
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // For time mode: timer only runs after first click
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isGameActive && timeLeft > 0 && gameMode === 'time') {
-      timer = setTimeout(() => {
-        setTimeLeft(prev => prev - 1);
-      }, 1000);
-    } else if (isGameActive && timeLeft === 0 && gameMode === 'time') {
-      endGame();
+    if (gameMode === 'time') {
+      if (isGameActive && hasStarted && timeLeft > 0) {
+        timerRef.current = setTimeout(() => {
+          setTimeLeft(prev => prev - 1);
+        }, 1000);
+      } else if (isGameActive && hasStarted && timeLeft === 0) {
+        endGame();
+      }
     }
-    return () => clearTimeout(timer);
-  }, [isGameActive, timeLeft, gameMode]);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [isGameActive, hasStarted, timeLeft, gameMode]);
+
+  // For clicks mode: timer only runs after first click
+  useEffect(() => {
+    if (gameMode === 'clicks') {
+      if (isGameActive && hasStarted) {
+        timerRef.current = setTimeout(() => {
+          setElapsedTime(prev => prev + 1);
+        }, 1000);
+      }
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [isGameActive, hasStarted, gameMode, elapsedTime]);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isGameActive && gameMode === 'clicks') {
-      timer = setTimeout(() => {
-        setElapsedTime(prev => prev + 1);
-      }, 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [isGameActive, gameMode, elapsedTime]);
-
-  useEffect(() => {
-    if (isGameActive && clickCount >= targetClicks && gameMode === 'clicks') {
+    if (isGameActive && hasStarted && clickCount >= targetClicks && gameMode === 'clicks') {
       endGame();
     }
-  }, [isGameActive, clickCount, targetClicks, gameMode]);
+  }, [isGameActive, hasStarted, clickCount, targetClicks, gameMode]);
 
   const startGame = () => {
     setClickCount(0);
     setTimeLeft(TIME_MODE_SECONDS);
     setElapsedTime(0);
     setIsGameActive(true);
+    setHasStarted(false); // Wait for first click to start timer
   };
 
   const endGame = () => {
     setIsGameActive(false);
+    setHasStarted(false);
     const newScore: Score = {
       id: Date.now(),
       clicks: clickCount,
@@ -142,6 +158,10 @@ export default function Home() {
 
   const handleClick = () => {
     if (isGameActive) {
+      // On first click, start the timer
+      if (!hasStarted) {
+        setHasStarted(true);
+      }
       setClickCount(prev => prev + 1);
     }
   };
@@ -153,6 +173,7 @@ export default function Home() {
 
   const handleGameModeChange = (newMode: 'time' | 'clicks') => {
     setIsGameActive(false);
+    setHasStarted(false);
     setClickCount(0);
     setTimeLeft(TIME_MODE_SECONDS);
     setElapsedTime(0);
@@ -338,10 +359,13 @@ export default function Home() {
     }
   `;
 
-  const boxBgClass = "bg-white/60 hover:bg-white/70";
+  // Make all boxes like the game area box but less transparent
+  // Game area box: bg-white/60 hover:bg-white/70
+  // We'll use bg-white/80 hover:bg-white/90 for all boxes (including stat boxes and scoreboard cards)
+  const boxBgClass = "bg-white/80 hover:bg-white/90";
 
   let currentCPS = 0;
-  if (isGameActive) {
+  if (isGameActive && hasStarted) {
     if (gameMode === "time") {
       currentCPS = (clickCount / (TIME_MODE_SECONDS - timeLeft || 1));
     } else {
@@ -411,7 +435,9 @@ export default function Home() {
             <div className="flex justify-center items-center gap-6 mb-6 w-full">
               <div className="flex justify-center w-full max-w-4xl gap-6">
                 {/* Clicks Box */}
-                <div className="top-stat-box bg-white/80 rounded-lg shadow border border-blue-200 px-6 py-4 flex flex-col items-center justify-center" >
+                <div className="top-stat-box transition-colors duration-700 rounded-lg shadow border border-blue-200 px-6 py-4 flex flex-col items-center justify-center"
+                  style={{ background: "rgba(255,255,255,0.8)" }}
+                >
                   <div className="flex flex-col items-center justify-center h-full w-full">
                     <span className="font-semibold text-blue-700 text-base mb-1" style={{ fontFamily: "'Open Sans', sans-serif" }}>Clicks</span>
                     <span
@@ -428,7 +454,9 @@ export default function Home() {
                   </div>
                 </div>
                 {/* Time Box */}
-                <div className="top-stat-box bg-white/80 rounded-lg shadow border border-blue-200 px-6 py-4 flex flex-col items-center justify-center" >
+                <div className="top-stat-box transition-colors duration-700 rounded-lg shadow border border-blue-200 px-6 py-4 flex flex-col items-center justify-center"
+                  style={{ background: "rgba(255,255,255,0.8)" }}
+                >
                   <div className="flex flex-col items-center justify-center h-full w-full">
                     <span className="font-semibold text-blue-700 text-base mb-1" style={{ fontFamily: "'Open Sans', sans-serif" }}>Time</span>
                     <span
@@ -445,7 +473,9 @@ export default function Home() {
                   </div>
                 </div>
                 {/* Animal Box */}
-                <div className="top-stat-box bg-white/80 rounded-lg shadow border border-blue-200 px-6 py-4 flex flex-col items-center justify-center" >
+                <div className="top-stat-box transition-colors duration-700 rounded-lg shadow border border-blue-200 px-6 py-4 flex flex-col items-center justify-center"
+                  style={{ background: "rgba(255,255,255,0.8)" }}
+                >
                   <div className="flex flex-col items-center justify-center h-full w-full">
                     <span className="font-semibold text-blue-700 text-base mb-1" style={{ fontFamily: "'Open Sans', sans-serif" }}>Your Speed</span>
                     <div className="flex flex-col items-center justify-center">
@@ -465,15 +495,15 @@ export default function Home() {
                 onClick={handleClick}
                 disabled={!isGameActive}
                 className={`
-                  w-full max-w-2xl h-40 rounded-lg text-4xl font-bold transition-all duration-150
+                  w-full max-w-4xl h-40 rounded-lg text-4xl font-bold transition-all duration-150
                   ${isGameActive 
-                    ? 'bg-pink-400 hover:bg-pink-500 active:scale-95 text-white cursor-pointer' 
+                    ? 'bg-red-400 hover:bg-pink-500 active:scale-95 text-white cursor-pointer' 
                     : 'bg-blue-200 text-blue-600 cursor-not-allowed'
                   }
                 `}
                 style={{ fontFamily: "'Open Sans', sans-serif" }}
               >
-                {isGameActive ? 'CLICK!' : 'Click  to Start'}
+                {isGameActive ? (hasStarted ? 'CLICK!' : 'Click to Start!') : 'Click  to Start'}
               </button>
             </div>
 
@@ -518,7 +548,13 @@ export default function Home() {
             <div className="mt-6 text-center text-blue-700" style={{ fontFamily: "'Open Sans', sans-serif" }}>
               {isGameActive ? (
                 <div className="text-orange-500 text-xl font-bold mb-2" style={{ fontFamily: "'Open Sans', sans-serif" }}>
-                  {gameMode === 'time' ? 'Click as fast as you can!' : 'Click 50 times as fast as you can!'}
+                  {!hasStarted
+                    ? (gameMode === 'time'
+                        ? 'Click the button to start the timer, then click as fast as you can!'
+                        : 'Click the button to start the timer, then click 50 times as fast as you can!')
+                    : (gameMode === 'time'
+                        ? 'Click as fast as you can!'
+                        : 'Click 50 times as fast as you can!')}
                 </div>
               ) : null}
             </div>
@@ -549,7 +585,7 @@ export default function Home() {
                     className={`scorecard-glass rounded-2xl px-6 pt-8 pb-5 flex flex-col items-center shadow-lg border relative ${score.id === lastScoreId ? "score-animate" : ""}`}
                     style={{
                       fontFamily: "'Open Sans', sans-serif",
-                      background: "rgba(255,255,255,0.85)",
+                      background: "rgba(255,255,255,0.8)",
                       minHeight: 210,
                     }}
                   >
